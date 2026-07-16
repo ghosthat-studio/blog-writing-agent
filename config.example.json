@@ -1,0 +1,28 @@
+{
+  "name": "Blog Writing Agent",
+  "instructions": "instructions.md",
+  "voice": "voice.md",
+
+  "model": {
+    "utility": {
+      "backend": "ollama",
+      "url": "http://localhost:11434",
+      "model": "qwen3:4b",
+      "temperature": 0.2
+    },
+    "draft": {
+      "backend": "openai",
+      "base_url": "http://localhost:1234",
+      "model": "",
+      "temperature": 0.6,
+      "timeout": 1800
+    }
+  },
+
+  "search": {
+    "enabled": true,
+    "url": "http://localhost:8888"
+  },
+
+  "state_dir": "state"
+}

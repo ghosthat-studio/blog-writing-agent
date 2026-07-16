@@ -1,0 +1,13 @@
+# Learner-local files — never commit these
+config.json
+instructions.md
+voice.md
+state/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# macOS
+.DS_Store
