@@ -76,6 +76,15 @@ class TestSystemPrompt(ConfigTestCase):
         Path(self.root, "instructions.md").write_text("M", encoding="utf-8")
         self.assertIn("Imogen", agent.system_prompt(cfg, self.root))
 
+    def test_she_knows_todays_date(self):
+        import datetime
+        cfg = _write_config(self.root)
+        Path(self.root, "instructions.md").write_text("M", encoding="utf-8")
+        prompt = agent.system_prompt(cfg, self.root)
+        today = datetime.date.today()
+        self.assertIn(today.strftime("%B"), prompt)   # month name
+        self.assertIn(str(today.year), prompt)        # current year
+
 
 class TestHelpers(unittest.TestCase):
     def test_slug_extracted_from_html_comment(self):

@@ -122,6 +122,19 @@ class TestDraftGrounding(ModeTestCase):
         self.assertIn("Fresh fact", draft_prompt)
         self.assertIn("YOUR research", draft_prompt)
 
+    def test_the_idea_itself_is_always_the_first_query(self):
+        gen = _fake_generate([
+            ("gather the current facts", "some tangent query"),
+            ("Write the full blog post", DRAFT_HTML),
+        ])
+        with mock.patch.object(llm, "generate", gen), \
+             mock.patch.object(search, "grounding", return_value="### r") as ground:
+            agent.draft(self.cfg, self.root, "top personal assistant agents today",
+                        review=False)
+        queries = ground.call_args[0][0]
+        self.assertEqual(queries[0], "top personal assistant agents today")
+        self.assertIn("some tangent query", queries)
+
     def test_no_search_skips_the_research(self):
         gen = _fake_generate([("Write the full blog post", DRAFT_HTML)])
         with mock.patch.object(llm, "generate", gen), \

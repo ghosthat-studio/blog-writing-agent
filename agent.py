@@ -78,10 +78,12 @@ APPLY_NOTE_PROMPT = (
 )
 
 DRAFT_QUERIES = (
-    "This is an idea for a blog post. List 3 to 6 short web-search queries that would "
-    "gather the current facts needed to write it properly: the products, tools, models, or "
-    "companies it touches, their current versions and pricing, and recent news about them. "
-    "Output one query per line, no numbering and no commentary.\n\nIDEA:\n\n{idea}"
+    "This is an idea for a blog post. List 3 to 5 short web-search queries that would "
+    "gather the current facts needed to write it properly. Every query must be about the "
+    "idea's own subject — do not introduce products, devices, or topics the idea does not "
+    "mention. When a query asks for the latest, top, or current anything, include the "
+    "current year from your instructions, never a past year. Output one query per line, "
+    "no numbering and no commentary.\n\nIDEA:\n\n{idea}"
 )
 
 DRAFT_TASK = (
@@ -130,7 +132,11 @@ def system_prompt(cfg, root):
         )
     instr = open(ip, encoding="utf-8").read()
     parts = [
-        "You are %s, this company's blog writing agent." % cfg.get("name", "Blog Writing Agent"),
+        "You are %s, this company's blog writing agent. Today is %s. Your training "
+        "data is older than that: treat live search results as the present and your "
+        "own memory of products, models, and versions as history."
+        % (cfg.get("name", "Blog Writing Agent"),
+           datetime.date.today().strftime("%B %d, %Y").replace(" 0", " ")),
         instr,
     ]
     vp = os.path.join(root, cfg.get("voice", "voice.md"))
@@ -217,9 +223,11 @@ def draft(cfg, root, idea, review=False, do_search=True):
     research = ""
     if do_search and cfg.get("search", {}).get("enabled"):
         qraw = _ask(cfg, root, DRAFT_QUERIES.format(idea=idea), temp=0.2)
-        queries = [q.strip(" -*•\t") for q in qraw.splitlines() if q.strip()][:6]
-        ground = search.grounding(queries, url=cfg["search"].get("url", "http://localhost:8888")) \
-            if queries else ""
+        # The idea itself is always the first query — the model's queries can
+        # wander off-topic (a stale small model will), but this one cannot.
+        queries = [idea.strip()[:120]]
+        queries += [q.strip(" -*•\t") for q in qraw.splitlines() if q.strip()][:5]
+        ground = search.grounding(queries, url=cfg["search"].get("url", "http://localhost:8888"))
         if ground:
             research = DRAFT_RESEARCH_BLOCK.format(ground=ground)
     initial = _ask(cfg, root, DRAFT_TASK.format(research=research, idea=idea),
