@@ -77,10 +77,27 @@ APPLY_NOTE_PROMPT = (
     "CHANGE REQUESTED:\n{note}\n\nDOCUMENT:\n{doc}"
 )
 
+DRAFT_QUERIES = (
+    "This is an idea for a blog post. List 3 to 6 short web-search queries that would "
+    "gather the current facts needed to write it properly: the products, tools, models, or "
+    "companies it touches, their current versions and pricing, and recent news about them. "
+    "Output one query per line, no numbering and no commentary.\n\nIDEA:\n\n{idea}"
+)
+
 DRAFT_TASK = (
     "Write the full blog post for this idea, as a single clean block of HTML (no page "
     "wrapper; <h1> title; <h2> sections). On the very first line put the slug as an HTML "
-    "comment: <!-- slug: my-post -->\n\nThe idea:\n\n{idea}"
+    "comment: <!-- slug: my-post -->\n\n"
+    "{research}"
+    "The idea:\n\n{idea}"
+)
+
+DRAFT_RESEARCH_BLOCK = (
+    "Here is live web search on this idea. This is YOUR research and it is already done. "
+    "Ground the post in it: take every name, version, price, and date from it, lead with "
+    "what is current in it, and never present something it contradicts. Your own memory of "
+    "products and models is stale by construction — where the research and your memory "
+    "disagree, the research wins.\n\n{ground}\n\n"
 )
 
 
@@ -194,9 +211,19 @@ def _self_review(cfg, root, draft_text):
 
 
 def draft(cfg, root, idea, review=False, do_search=True):
-    """Write a post. With review, she fact-checks her own draft and corrects
-    only what is wrong. Returns the path of the final draft."""
-    initial = _ask(cfg, root, DRAFT_TASK.format(idea=idea), tier="draft", temp=0.6)
+    """Write a post. She researches the idea FIRST, so the draft is written from
+    current facts rather than her stale memory; with review she then fact-checks
+    her own result and corrects only what is wrong. Returns the final path."""
+    research = ""
+    if do_search and cfg.get("search", {}).get("enabled"):
+        qraw = _ask(cfg, root, DRAFT_QUERIES.format(idea=idea), temp=0.2)
+        queries = [q.strip(" -*•\t") for q in qraw.splitlines() if q.strip()][:6]
+        ground = search.grounding(queries, url=cfg["search"].get("url", "http://localhost:8888")) \
+            if queries else ""
+        if ground:
+            research = DRAFT_RESEARCH_BLOCK.format(ground=ground)
+    initial = _ask(cfg, root, DRAFT_TASK.format(research=research, idea=idea),
+                   tier="draft", temp=0.6)
     slug = _slug_of(initial)
     ddir = _state(cfg, root, "drafts")
     changed, notes, final = False, None, initial

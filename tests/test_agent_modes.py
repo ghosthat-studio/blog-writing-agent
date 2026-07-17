@@ -106,11 +106,45 @@ class TestSelfReview(ModeTestCase):
         self.assertIn("skipped", notes)
 
 
+class TestDraftGrounding(ModeTestCase):
+    def test_draft_prompt_carries_her_research(self):
+        prompts = []
+        def gen(tier, prompt, system=None, temperature=None):
+            prompts.append(prompt)
+            if "gather the current facts" in prompt:
+                return "latest personal assistant agents 2026"
+            return DRAFT_HTML
+        with mock.patch.object(llm, "generate", gen), \
+             mock.patch.object(search, "grounding",
+                               return_value="### Results for: q\n- Fresh fact (http://e)"):
+            agent.draft(self.cfg, self.root, "top agents today", review=False)
+        draft_prompt = next(p for p in prompts if "Write the full blog post" in p)
+        self.assertIn("Fresh fact", draft_prompt)
+        self.assertIn("YOUR research", draft_prompt)
+
+    def test_no_search_skips_the_research(self):
+        gen = _fake_generate([("Write the full blog post", DRAFT_HTML)])
+        with mock.patch.object(llm, "generate", gen), \
+             mock.patch.object(search, "grounding") as ground:
+            agent.draft(self.cfg, self.root, "an idea", review=False, do_search=False)
+        ground.assert_not_called()
+
+    def test_empty_grounding_still_drafts(self):
+        gen = _fake_generate([
+            ("gather the current facts", "q1"),
+            ("Write the full blog post", DRAFT_HTML),
+        ])
+        with mock.patch.object(llm, "generate", gen), \
+             mock.patch.object(search, "grounding", return_value=""):
+            path = agent.draft(self.cfg, self.root, "an idea", review=False)
+        self.assertTrue(path.endswith("test-post.html"))
+
+
 class TestDraftMode(ModeTestCase):
     def test_draft_writes_the_file_and_the_runlog(self):
         gen = _fake_generate([("Write the full blog post", DRAFT_HTML)])
         with mock.patch.object(llm, "generate", gen):
-            path = agent.draft(self.cfg, self.root, "an idea", review=False)
+            path = agent.draft(self.cfg, self.root, "an idea", review=False, do_search=False)
         self.assertTrue(path.endswith("test-post.html"))
         self.assertEqual(Path(path).read_text(encoding="utf-8"), DRAFT_HTML)
         runs = list(Path(self.root, "state", "runs").glob("*.jsonl"))
@@ -121,8 +155,9 @@ class TestDraftMode(ModeTestCase):
 
     def test_reviewed_draft_keeps_the_original_for_diffing(self):
         gen = _fake_generate([
+            ("gather the current facts", "q1"),
             ("Write the full blog post", DRAFT_HTML),
-            ("web-search queries", "q1"),
+            ("verify the factual claims", "q1"),
             ("Fact-check the following draft", BAD_FACTS),
             ("Apply these fact-check findings", FIXED_HTML),
         ])
