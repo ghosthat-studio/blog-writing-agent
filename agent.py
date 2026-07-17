@@ -308,6 +308,118 @@ def _agent_slug(cfg):
     return re.sub(r"[^a-z0-9]+", "-", cfg.get("name", "agent").lower()).strip("-") or "agent"
 
 
+def _get_json(url, timeout=5):
+    """GET a URL and parse JSON. Raises RuntimeError('HTTP <code> ...') on HTTP
+    errors so callers can tell a closed port from a refusing server."""
+    import urllib.error
+    import urllib.request
+    try:
+        with urllib.request.urlopen(
+                urllib.request.Request(url, headers={"User-Agent": "agent-doctor"}),
+                timeout=timeout) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        raise RuntimeError("HTTP %d from %s" % (e.code, url))
+
+
+def _check_tier(name, tier):
+    """One (name, ok, detail) row for a model tier: is the server up, and is the
+    named model actually available on it."""
+    backend = tier.get("backend")
+    model = tier.get("model", "")
+    if backend == "ollama":
+        base = tier.get("url", "http://localhost:11434").rstrip("/")
+        probe = base + "/api/tags"
+    elif backend == "openai":
+        base = tier.get("base_url", "http://localhost:1234").rstrip("/")
+        probe = base + "/v1/models"
+    else:
+        return (name, False, "unknown backend %r — use \"ollama\" or \"openai\"" % backend)
+    try:
+        d = _get_json(probe)
+    except Exception as e:
+        return (name, False,
+                "cannot reach %s (%s) — is your model server running? Start Ollama / "
+                "LM Studio / your server, then run doctor again." % (base, e))
+    if backend == "ollama":
+        have = [m.get("name", "") for m in d.get("models", [])]
+        if model and not any(h == model or h.split(":")[0] == model for h in have):
+            return (name, False,
+                    "server at %s is up but has no model named %r. Pull it first "
+                    "(ollama pull %s) or pick one you have: %s"
+                    % (base, model, model, ", ".join(have[:6]) or "(none)"))
+    else:
+        have = [m.get("id", "") for m in d.get("data", [])]
+        if model and have and model not in have:
+            return (name, False,
+                    "server at %s is up but does not list model %r. Loaded models: %s"
+                    % (base, model, ", ".join(have[:6])))
+    return (name, True, "%s at %s, model %s" % (backend, base, model or "(unset)"))
+
+
+def doctor(root):
+    """Preflight the whole setup. Returns [(check, ok, detail)] — every known
+    9pm install failure, checked, with the fix in the message."""
+    checks = [("python", True, "%d.%d.%d at %s"
+               % (sys.version_info[:3] + (sys.executable,)))]
+    try:
+        cfg = load_config(root)
+        checks.append(("config", True, "config.json parsed"))
+    except RuntimeError as e:
+        checks.append(("config", False, str(e)))
+        return checks
+    ip = os.path.join(root, cfg.get("instructions", "instructions.md"))
+    if os.path.exists(ip):
+        checks.append(("instructions", True, ip))
+    else:
+        checks.append(("instructions", False,
+                       "no instructions file at %s — copy instructions.example.md to "
+                       "instructions.md and make it yours." % ip))
+    vp = os.path.join(root, cfg.get("voice", "voice.md"))
+    checks.append(("voice", True, vp if os.path.exists(vp) else
+                   "no voice.md yet — she will write without your company voice "
+                   "until you add one (module 2)."))
+    for tier_name in ("utility", "draft"):
+        tier = cfg.get("model", {}).get(tier_name)
+        if tier:
+            checks.append(_check_tier("model:" + tier_name, tier))
+        else:
+            checks.append(("model:" + tier_name, tier_name == "draft",
+                           "no %s tier in config.json%s" % (tier_name,
+                           " — drafts will use the utility model" if tier_name == "draft"
+                           else " — she needs at least a utility model")))
+    s = cfg.get("search", {})
+    if not s.get("enabled"):
+        checks.append(("search", True,
+                       "disabled in config.json — drafting works; fact-checking is off."))
+    else:
+        surl = s.get("url", "http://localhost:8888").rstrip("/")
+        try:
+            _get_json(surl + "/search?q=doctor&format=json")
+            checks.append(("search", True, "SearXNG answering at " + surl))
+        except Exception as e:
+            msg = str(e)
+            if "403" in msg or "HTTP 4" in msg:
+                checks.append(("search", False,
+                               "SearXNG at %s refused the JSON API (%s). Its settings.yml "
+                               "ships with json off — add it under search: formats: "
+                               "[html, json], then restart. See the README." % (surl, msg)))
+            else:
+                checks.append(("search", False,
+                               "cannot reach SearXNG at %s (%s) — is the container "
+                               "running? docker start searxng, or set search.enabled "
+                               "to false to draft without fact-checking." % (surl, msg)))
+    try:
+        sd = _state(cfg, root)
+        probe = os.path.join(sd, ".doctor")
+        open(probe, "w").close()
+        os.remove(probe)
+        checks.append(("state", True, sd + " is writable"))
+    except OSError as e:
+        checks.append(("state", False, "cannot write the state directory: %s" % e))
+    return checks
+
+
 def main():
     ap = argparse.ArgumentParser(description="Your blog writing agent")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -325,7 +437,14 @@ def main():
     a2.add_argument("path")
     a2.add_argument("--note")
     a2.add_argument("--note-file")
+    sub.add_parser("doctor", help="check the whole setup and say what to fix")
     args = ap.parse_args()
+    if args.cmd == "doctor":
+        checks = doctor(ROOT)
+        for name, ok, detail in checks:
+            print("%s %-14s %s" % ("ok " if ok else "FIX", name, detail))
+        bad = [c for c in checks if not c[1]]
+        raise SystemExit(1 if bad else 0)
     try:
         cfg = load_config(ROOT)
         if args.cmd == "draft":
