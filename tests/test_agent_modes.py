@@ -116,7 +116,8 @@ class TestDraftGrounding(ModeTestCase):
             return DRAFT_HTML
         with mock.patch.object(llm, "generate", gen), \
              mock.patch.object(search, "grounding",
-                               return_value="### Results for: q\n- Fresh fact (http://e)"):
+                               return_value="### Results for: q\n- Fresh fact (http://e)"), \
+             mock.patch.object(search, "search", return_value=[]):
             agent.draft(self.cfg, self.root, "top agents today", review=False)
         draft_prompt = next(p for p in prompts if "Write the full blog post" in p)
         self.assertIn("Fresh fact", draft_prompt)
@@ -128,12 +129,32 @@ class TestDraftGrounding(ModeTestCase):
             ("Write the full blog post", DRAFT_HTML),
         ])
         with mock.patch.object(llm, "generate", gen), \
-             mock.patch.object(search, "grounding", return_value="### r") as ground:
+             mock.patch.object(search, "grounding", return_value="### r") as ground, \
+             mock.patch.object(search, "search", return_value=[]):
             agent.draft(self.cfg, self.root, "top personal assistant agents today",
                         review=False)
         queries = ground.call_args[0][0]
         self.assertEqual(queries[0], "top personal assistant agents today")
         self.assertIn("some tangent query", queries)
+
+    def test_research_reads_the_top_pages_not_just_snippets(self):
+        from core import fetch
+        prompts = []
+        def gen(tier, prompt, system=None, temperature=None):
+            prompts.append(prompt)
+            if "gather the current facts" in prompt:
+                return "q1"
+            return DRAFT_HTML
+        results = [{"title": "8 Best Agents", "url": "http://e/list", "content": "snippet"}]
+        with mock.patch.object(llm, "generate", gen), \
+             mock.patch.object(search, "grounding", return_value="### r"), \
+             mock.patch.object(search, "search", return_value=results), \
+             mock.patch.object(fetch, "fetch_text",
+                               return_value="OpenClaw leads, NemoClaw and Hermes follow."):
+            agent.draft(self.cfg, self.root, "top agents today", review=False)
+        draft_prompt = next(p for p in prompts if "Write the full blog post" in p)
+        self.assertIn("OpenClaw leads", draft_prompt)
+        self.assertIn("http://e/list", draft_prompt)
 
     def test_no_search_skips_the_research(self):
         gen = _fake_generate([("Write the full blog post", DRAFT_HTML)])
@@ -148,7 +169,8 @@ class TestDraftGrounding(ModeTestCase):
             ("Write the full blog post", DRAFT_HTML),
         ])
         with mock.patch.object(llm, "generate", gen), \
-             mock.patch.object(search, "grounding", return_value=""):
+             mock.patch.object(search, "grounding", return_value=""), \
+             mock.patch.object(search, "search", return_value=[]):
             path = agent.draft(self.cfg, self.root, "an idea", review=False)
         self.assertTrue(path.endswith("test-post.html"))
 
@@ -175,7 +197,8 @@ class TestDraftMode(ModeTestCase):
             ("Apply these fact-check findings", FIXED_HTML),
         ])
         with mock.patch.object(llm, "generate", gen), \
-             mock.patch.object(search, "grounding", return_value="### Results"):
+             mock.patch.object(search, "grounding", return_value="### Results"), \
+             mock.patch.object(search, "search", return_value=[]):
             path = agent.draft(self.cfg, self.root, "an idea", review=True)
         drafts = Path(self.root, "state", "drafts")
         self.assertEqual(Path(path).read_text(encoding="utf-8"), FIXED_HTML)

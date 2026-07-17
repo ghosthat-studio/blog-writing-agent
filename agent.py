@@ -29,7 +29,7 @@ if sys.version_info < (3, 10):
         % (sys.version_info.major, sys.version_info.minor)
     )
 
-from core import llm, search, runlog  # noqa: E402  (after the version guard on purpose)
+from core import fetch, llm, search, runlog  # noqa: E402  (after the version guard on purpose)
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -227,7 +227,16 @@ def draft(cfg, root, idea, review=False, do_search=True):
         # wander off-topic (a stale small model will), but this one cannot.
         queries = [idea.strip()[:120]]
         queries += [q.strip(" -*•\t") for q in qraw.splitlines() if q.strip()][:5]
-        ground = search.grounding(queries, url=cfg["search"].get("url", "http://localhost:8888"))
+        url = cfg["search"].get("url", "http://localhost:8888")
+        ground = search.grounding(queries, url=url)
+        # Snippets carry titles, not contents — a "best agents of 2026" page
+        # surfaces as a headline without its list. Read the top pages too.
+        pages = []
+        for r in search.search(queries[0], url=url, n=3)[:2]:
+            text = fetch.fetch_text(r["url"], max_chars=2500)
+            if text:
+                pages.append("### From the page: %s (%s)\n%s" % (r["title"], r["url"], text))
+        ground = "\n\n".join([b for b in [ground] + pages if b])
         if ground:
             research = DRAFT_RESEARCH_BLOCK.format(ground=ground)
     initial = _ask(cfg, root, DRAFT_TASK.format(research=research, idea=idea),
