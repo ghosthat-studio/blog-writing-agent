@@ -42,6 +42,44 @@ dashboard/             run her without a terminal (coming)
 state/                 her drafts, memory, and run logs live here (git-ignored)
 ```
 
+## Search: what makes her factual
+
+A local model's memory is stale by construction — it will state a version number with
+total confidence and be wrong. Grounding fixes that, and it runs on your machine too:
+[SearXNG](https://docs.searxng.org/), a self-hosted metasearch engine. No API key, no
+rate card, nobody logging your queries.
+
+The quick way is Docker:
+
+```
+docker run -d --name searxng -p 8888:8080 searxng/searxng
+```
+
+One required tweak: SearXNG ships with its JSON API off. In the container's
+`/etc/searxng/settings.yml` (or your own settings file), make sure `formats` includes
+`json`:
+
+```yaml
+search:
+  formats:
+    - html
+    - json
+```
+
+Restart the container, then check it answers:
+
+```
+curl "http://localhost:8888/search?q=test&format=json"
+```
+
+That URL goes in `config.json` under `search.url`. If you'd rather start without
+search, set `search.enabled` to `false` — drafting works fine; she just can't
+fact-check herself, so `--review`, `factcheck`, and `revise` will sit this one out.
+
+She is deliberately gentle with the engines: paced requests, retries with backoff, an
+on-disk cache. Hammering a metasearch instance gets it CAPTCHA-blocked, and then
+nobody gets facts.
+
 ## License
 
 MIT. She's yours.
