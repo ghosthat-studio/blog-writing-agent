@@ -104,7 +104,7 @@ class TestDraftContent(DashboardTestCase):
 
 class TestRunJob(DashboardTestCase):
     def test_draft_job_runs_and_reports_its_output(self):
-        def fake_draft(cfg, root, idea, review=False, do_search=True):
+        def fake_draft(cfg, root, idea, review=False, do_search=True, checkpoint=None):
             p = Path(root, "state", "drafts", "new-post.html")
             p.write_text("<h1>%s</h1>" % idea, encoding="utf-8")
             return str(p)
@@ -115,7 +115,7 @@ class TestRunJob(DashboardTestCase):
         self.assertIn("new-post.html", job["output"])
 
     def test_failed_job_reports_the_error_plainly(self):
-        def boom(cfg, root, idea, review=False, do_search=True):
+        def boom(cfg, root, idea, review=False, do_search=True, checkpoint=None):
             raise RuntimeError("Could not reach your model at http://x — is it running?")
         with mock.patch.object(dash.agent, "draft", boom):
             _, resp = _post(self.base + "/api/run", {"mode": "draft", "idea": "i"})
@@ -161,3 +161,36 @@ class TestRunlogEndpoint(DashboardTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCheckpointGate(DashboardTestCase):
+    def test_paused_draft_waits_and_resumes_on_click(self):
+        def fake_draft(cfg, root, idea, review=False, do_search=True, checkpoint=None):
+            if checkpoint:
+                checkpoint({"queries": ["q1", "q2"], "sources": [{"title": "T", "url": "u"}]})
+            p = Path(root, "state", "drafts", "paused-post.html")
+            p.write_text("<h1>x</h1>", encoding="utf-8")
+            return str(p)
+        with mock.patch.object(dash.agent, "draft", fake_draft):
+            _, resp = _post(self.base + "/api/run",
+                            {"mode": "draft", "idea": "i", "pause": True})
+            jid = resp["job_id"]
+            deadline = time.time() + 5
+            job = None
+            while time.time() < deadline:
+                _, body = _get(self.base + "/api/jobs")
+                job = next(j for j in json.loads(body)["jobs"] if j["id"] == jid)
+                if job["status"] == "waiting":
+                    break
+                time.sleep(0.05)
+            self.assertEqual(job["status"], "waiting")
+            self.assertEqual(job["yielded"]["queries"], ["q1", "q2"])
+            _post(self.base + "/api/resume", {"job_id": jid})
+            job = self._wait_for_job(jid)
+        self.assertEqual(job["status"], "done")
+        self.assertIn("paused-post.html", job["output"])
+
+    def test_resume_of_unknown_job_is_404(self):
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            _post(self.base + "/api/resume", {"job_id": 999})
+        self.assertEqual(ctx.exception.code, 404)

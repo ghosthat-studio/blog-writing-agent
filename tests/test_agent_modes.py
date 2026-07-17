@@ -256,3 +256,35 @@ class TestApplyMode(ModeTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCheckpoint(ModeTestCase):
+    def test_checkpoint_receives_research_before_writing(self):
+        from core import fetch
+        order = []
+        def gen(tier, prompt, system=None, temperature=None):
+            if "gather the current facts" in prompt:
+                return "tangent query"
+            order.append("write")
+            return DRAFT_HTML
+        def checkpoint(info):
+            order.append("checkpoint")
+            self.info = info
+        results = [{"title": "A Page", "url": "http://e/p", "content": "s"}]
+        with mock.patch.object(llm, "generate", gen), \
+             mock.patch.object(search, "grounding", return_value="### r"), \
+             mock.patch.object(search, "search", return_value=results), \
+             mock.patch.object(fetch, "fetch_text", return_value="page text"):
+            agent.draft(self.cfg, self.root, "top agents today", review=False,
+                        checkpoint=checkpoint)
+        self.assertEqual(order, ["checkpoint", "write"])
+        self.assertEqual(self.info["queries"][0], "top agents today")
+        self.assertIn("tangent query", self.info["queries"])
+        self.assertEqual(self.info["sources"], [{"title": "A Page", "url": "http://e/p"}])
+
+    def test_no_checkpoint_means_no_pause(self):
+        gen = _fake_generate([("Write the full blog post", DRAFT_HTML)])
+        with mock.patch.object(llm, "generate", gen):
+            path = agent.draft(self.cfg, self.root, "an idea", review=False,
+                               do_search=False)
+        self.assertTrue(path.endswith("test-post.html"))

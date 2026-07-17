@@ -41,16 +41,19 @@ class DashboardServer(ThreadingHTTPServer):
 
     # --- jobs -----------------------------------------------------------
     def start_job(self, kind, fn):
+        """fn receives its own job dict, so a run can park itself on a
+        checkpoint (status 'waiting', yielded state visible) and resume when
+        /api/resume sets its event. Keys starting with _ never leave the box."""
         with self.jobs_lock:
             self._job_seq += 1
             job = {"id": self._job_seq, "kind": kind, "status": "running",
-                   "output": None, "error": None}
+                   "output": None, "error": None, "yielded": None}
             self.jobs.append(job)
             self.jobs = self.jobs[-20:]
 
         def _run():
             try:
-                job["output"] = fn()
+                job["output"] = fn(job)
                 job["status"] = "done"
             except Exception as e:
                 job["error"] = str(e)
@@ -58,6 +61,15 @@ class DashboardServer(ThreadingHTTPServer):
 
         threading.Thread(target=_run, daemon=True).start()
         return job["id"]
+
+    def job_by_id(self, job_id):
+        with self.jobs_lock:
+            return next((j for j in self.jobs if j["id"] == job_id), None)
+
+    def jobs_public(self):
+        with self.jobs_lock:
+            return [{k: v for k, v in j.items() if not k.startswith("_")}
+                    for j in self.jobs[::-1]]
 
     # --- state ----------------------------------------------------------
     def cfg(self):
@@ -138,10 +150,10 @@ class Handler(BaseHTTPRequestHandler):
                 "name": c.get("name", "Blog Writing Agent"),
                 "search_enabled": bool(c.get("search", {}).get("enabled")),
                 "drafts": srv.list_drafts(),
-                "jobs": srv.jobs[::-1],
+                "jobs": srv.jobs_public(),
             })
         if path == "/api/jobs":
-            return self._json(200, {"jobs": srv.jobs[::-1]})
+            return self._json(200, {"jobs": srv.jobs_public()})
         if path == "/api/runlog":
             return self._json(200, {"records": srv.runlog_records()})
         if path == "/api/draft":
@@ -168,6 +180,16 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError as e:
                 return self._json(400, {"error": str(e)})
             return self._json(200, {"job_id": job_id})
+        if self.path == "/api/resume":
+            job = srv.job_by_id(body.get("job_id"))
+            if not job:
+                return self._json(404, {"error": "no such job"})
+            ev = job.get("_resume")
+            if job["status"] == "waiting" and ev:
+                ev.set()
+                return self._json(200, {"resumed": True})
+            return self._json(200, {"resumed": False,
+                                    "note": "job is not waiting on a checkpoint"})
         if self.path == "/api/approve":
             fn = body.get("file", "")
             if not _safe_name(fn):
@@ -200,19 +222,36 @@ class Handler(BaseHTTPRequestHandler):
             if not idea:
                 raise ValueError("an idea is required")
             review = bool(body.get("review"))
-            return srv.start_job("draft", lambda: agent.draft(
-                cfg, root, idea, review=review, do_search=not body.get("no_search")))
+            pause = bool(body.get("pause"))
+
+            def run(job):
+                checkpoint = None
+                if pause:
+                    ev = threading.Event()
+                    job["_resume"] = ev
+
+                    def checkpoint(info):
+                        # Park this thread: yield what she gathered, wait for
+                        # the human click. Nothing is lost by waiting.
+                        job["yielded"] = info
+                        job["status"] = "waiting"
+                        ev.wait()
+                        job["status"] = "running"
+                return agent.draft(cfg, root, idea, review=review,
+                                   do_search=not body.get("no_search"),
+                                   checkpoint=checkpoint)
+            return srv.start_job("draft", run)
         if mode == "factcheck":
             p = draft_path()
-            return srv.start_job("factcheck", lambda: agent.factcheck(cfg, root, p))
+            return srv.start_job("factcheck", lambda job: agent.factcheck(cfg, root, p))
         if mode == "revise":
             p = draft_path()
-            return srv.start_job("revise", lambda: agent.revise(cfg, root, p))
+            return srv.start_job("revise", lambda job: agent.revise(cfg, root, p))
         note = (body.get("note") or "").strip()
         if not note:
             raise ValueError("a note is required")
         p = draft_path()
-        return srv.start_job("apply", lambda: agent.apply_note(cfg, root, p, note))
+        return srv.start_job("apply", lambda job: agent.apply_note(cfg, root, p, note))
 
 
 def make_server(root, port=8787):

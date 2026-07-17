@@ -216,11 +216,16 @@ def _self_review(cfg, root, draft_text):
     return notes, revised
 
 
-def draft(cfg, root, idea, review=False, do_search=True):
+def draft(cfg, root, idea, review=False, do_search=True, checkpoint=None):
     """Write a post. She researches the idea FIRST, so the draft is written from
     current facts rather than her stale memory; with review she then fact-checks
-    her own result and corrects only what is wrong. Returns the final path."""
+    her own result and corrects only what is wrong. Returns the final path.
+
+    checkpoint, if given, is called with what she gathered (queries, sources)
+    AFTER research and BEFORE writing — and she does not write until it returns.
+    This is the pause-and-yield gate: the caller decides how long to hold her."""
     research = ""
+    queries, sources = [], []
     if do_search and cfg.get("search", {}).get("enabled"):
         qraw = _ask(cfg, root, DRAFT_QUERIES.format(idea=idea), temp=0.2)
         # The idea itself is always the first query — the model's queries can
@@ -236,9 +241,13 @@ def draft(cfg, root, idea, review=False, do_search=True):
             text = fetch.fetch_text(r["url"], max_chars=2500)
             if text:
                 pages.append("### From the page: %s (%s)\n%s" % (r["title"], r["url"], text))
+                sources.append({"title": r["title"], "url": r["url"]})
         ground = "\n\n".join([b for b in [ground] + pages if b])
         if ground:
             research = DRAFT_RESEARCH_BLOCK.format(ground=ground)
+    if checkpoint:
+        checkpoint({"queries": queries, "sources": sources,
+                    "research_chars": len(research)})
     initial = _ask(cfg, root, DRAFT_TASK.format(research=research, idea=idea),
                    tier="draft", temp=0.6)
     slug = _slug_of(initial)

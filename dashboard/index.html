@@ -36,6 +36,13 @@
   #viewer-empty { color: var(--dim); padding: 2rem 0; }
   .err { color: #e08f8f; font-size: 0.9375rem; margin-top: 0.5rem; white-space: pre-wrap; }
   .jobline { font-size: 0.875rem; color: var(--warn); margin-top: 0.5rem; }
+  .waiting {
+    margin-top: 0.75rem; border: 1px solid var(--warn); border-radius: 6px;
+    padding: 0.75rem 0.9rem; background: rgba(216, 169, 127, 0.06);
+  }
+  .waiting .w-head { color: var(--warn); font-weight: 600; font-size: 0.9375rem; margin-bottom: 0.4rem; }
+  .waiting .w-body { font-size: 0.875rem; color: var(--dim); white-space: pre-wrap; margin-bottom: 0.6rem; }
+  .goahead { background: var(--warn); }
 </style>
 </head>
 <body>
@@ -49,8 +56,14 @@
       <h2>New draft</h2>
       <textarea id="idea" placeholder="What should she write about?"></textarea>
       <label class="check"><input type="checkbox" id="review" checked> fact-check the draft (facts only, never voice)</label>
+      <label class="check"><input type="checkbox" id="pause"> pause before writing — she yields her research and waits for you</label>
       <button id="go">Draft it</button>
       <div class="jobline" id="jobline" hidden></div>
+      <div class="waiting" id="waiting" hidden>
+        <div class="w-head">She's ready to write</div>
+        <div class="w-body" id="waiting-body"></div>
+        <button class="goahead" id="goahead">Go ahead</button>
+      </div>
       <div class="err" id="err" hidden></div>
     </div>
     <div class="panel">
@@ -117,11 +130,26 @@ async function refresh() {
   drafts.replaceChildren(...d.drafts.map(draftRow));
   if (!d.drafts.length) drafts.textContent = "none yet";
   const running = d.jobs.filter(j => j.status === "running");
-  busy = running.length > 0;
-  $("status").textContent = busy ? "working…" : "idle";
+  const waiting = d.jobs.find(j => j.status === "waiting");
+  busy = running.length > 0 || !!waiting;
+  $("status").textContent = waiting ? "waiting on you" : (busy ? "working…" : "idle");
   $("status").className = "status" + (busy ? " busy" : "");
-  $("jobline").hidden = !busy;
-  if (busy) $("jobline").textContent = running.map(j => j.kind + " running…").join(", ");
+  $("jobline").hidden = running.length === 0;
+  if (running.length) $("jobline").textContent = running.map(j => j.kind + " running…").join(", ");
+  $("waiting").hidden = !waiting;
+  if (waiting) {
+    const y = waiting.yielded || {};
+    const queries = (y.queries || []).map(q => "· " + q).join("\n");
+    const sources = (y.sources || []).map(s => "· " + s.title + "  (" + s.url + ")").join("\n");
+    $("waiting-body").textContent =
+      (queries ? "She searched:\n" + queries + "\n" : "") +
+      (sources ? "She read:\n" + sources : "") ||
+      "No research this run — search is off. She is holding before writing.";
+    $("goahead").onclick = async () => {
+      await api("/api/resume", {job_id: waiting.id});
+      poll();
+    };
+  }
   const failed = d.jobs.find(j => j.status === "error");
   $("err").hidden = !failed;
   if (failed) $("err").textContent = failed.error;
@@ -137,7 +165,8 @@ $("go").onclick = async () => {
   const idea = $("idea").value.trim();
   if (!idea || busy) return;
   $("err").hidden = true;
-  await api("/api/run", {mode: "draft", idea, review: $("review").checked});
+  await api("/api/run", {mode: "draft", idea, review: $("review").checked,
+                         pause: $("pause").checked});
   $("idea").value = "";
   poll();
 };
