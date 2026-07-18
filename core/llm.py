@@ -1,7 +1,7 @@
 """Model interface. Talks to Ollama or any OpenAI-compatible server, stdlib only.
 
 The model is config, not code: swap Ollama for LM Studio, llama.cpp's server,
-vLLM, or a hosted key by editing config.json. Two tiers — a small fast model for
+vLLM, or a hosted key by editing config.json. Two tiers: a small fast model for
 utility work (queries, lists, judging), the good model for prose. Same code, one
 config block apart.
 
@@ -79,7 +79,7 @@ def generate(tier, prompt, system=None, temperature=None):
                               max_tokens=tier.get("max_tokens"), think=think)
     else:
         raise RuntimeError(
-            "Unknown model backend %r in config.json — use \"ollama\" for Ollama, or "
+            "Unknown model backend %r in config.json. Use \"ollama\" for Ollama, or "
             "\"openai\" for anything with an OpenAI-compatible API (LM Studio, "
             "llama.cpp's llama-server, vLLM, a hosted key)." % backend
         )
@@ -94,7 +94,7 @@ def generate(tier, prompt, system=None, temperature=None):
         raise RuntimeError("Your model server at %s returned HTTP %s: %s" % (base, e.code, detail))
     except Exception as e:
         raise RuntimeError(
-            "Could not reach your model at %s — is it running? "
+            "Could not reach your model at %s; is it running? "
             "(started Ollama / LM Studio / your server?) Underlying error: %s" % (base, e)
         )
     if backend == "ollama":

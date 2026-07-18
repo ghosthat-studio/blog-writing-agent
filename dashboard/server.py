@@ -2,7 +2,7 @@
 """Her dashboard: run her without a terminal, watch her work, read the log.
 
 The dashboard is how an agent stops being a script and starts being staff. It
-binds to 127.0.0.1 — your machine only — and the human gate is built in:
+binds to 127.0.0.1, your machine only, and the human gate is built in:
 nothing publishes without you clicking Approve.
 
   python3 dashboard/server.py            http://127.0.0.1:8787

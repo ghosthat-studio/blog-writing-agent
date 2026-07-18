@@ -114,3 +114,27 @@ class TestDoctorState(DoctorTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestUnconfiguredDraftTier(DoctorTestCase):
+    def test_empty_draft_model_soft_passes_without_probing(self):
+        cfg = _write_setup(self.root)
+        cfg["model"]["draft"] = {"backend": "openai", "base_url": "http://localhost:1234",
+                                 "model": ""}
+        Path(self.root, "config.json").write_text(json.dumps(cfg), encoding="utf-8")
+        tags = {"models": [{"name": "small"}]}
+        with mock.patch.object(agent, "_get_json", return_value=tags) as get:
+            checks = agent.doctor(self.root)
+        name, ok, detail = _result(checks, "model:draft")
+        self.assertTrue(ok)
+        self.assertIn("utility", detail)
+        for call in get.call_args_list:
+            self.assertNotIn("1234", call.args[0])  # never probed the empty tier
+
+    def test_empty_utility_model_still_fails(self):
+        cfg = _write_setup(self.root)
+        cfg["model"]["utility"]["model"] = ""
+        Path(self.root, "config.json").write_text(json.dumps(cfg), encoding="utf-8")
+        with mock.patch.object(agent, "_get_json", return_value={"models": [], "data": []}):
+            checks = agent.doctor(self.root)
+        self.assertFalse(_result(checks, "model:utility")[1])

@@ -3,14 +3,18 @@
 
 Modes:
   python3 agent.py draft --idea "..." [--review] [--no-search]
-  python3 agent.py factcheck PATH         fact notes only (web search)
+  python3 agent.py factcheck PATH          fact notes only (web search)
   python3 agent.py revise PATH [--no-search]
-  python3 agent.py apply PATH --note "..."  targeted edit, backup kept
+  python3 agent.py apply PATH --note "..."   targeted edit, backup kept
 
-The review pass is FACT-CHECK ONLY: it verifies claims against live search and
-corrects only what is wrong or unverifiable, leaving voice, rhythm, structure,
-and length exactly as written. There is deliberately no style pass — the draft
-already wrote with your voice, and rewriting against a punch-list flattens it.
+The review pass corrects facts and refuses to touch your prose. It verifies
+claims against live search and fixes only what is wrong or unverifiable; voice,
+rhythm, structure, and length ship exactly as written. There is deliberately no
+style pass, because a rewrite against a punch-list flattens prose.
+
+When anything about the setup feels wrong:
+  python3 agent.py doctor                  every known trap, with its fix
+
 Nothing publishes without you.
 """
 import argparse
@@ -24,7 +28,7 @@ import sys
 if sys.version_info < (3, 10):
     raise SystemExit(
         "This agent needs Python 3.10 or newer; you are running %d.%d.\n"
-        "macOS ships 3.9 as 'python3' — install a current Python from python.org "
+        "macOS ships 3.9 as 'python3'. Install a current Python from python.org "
         "or Homebrew, then recreate your venv with it."
         % (sys.version_info.major, sys.version_info.minor)
     )
@@ -53,7 +57,7 @@ FACT_FIX_PROMPT = (
     "using the given correction and source; soften or qualify anything UNVERIFIED; remove "
     "invented specifics that could not be confirmed. When a model, product, price, version, "
     "or date is involved, use the REAL current fact from the findings, never your own "
-    "memory. Change ONLY what the findings require — keep the document's voice, structure, "
+    "memory. Change ONLY what the findings require, and keep the document's voice, structure, "
     "length, and every other line exactly as they are. If the document is HTML return valid "
     "HTML; if markdown, markdown. Return the full document and nothing else.\n\n"
     "FACT-CHECK FINDINGS:\n{facts}\n\nDOCUMENT:\n{doc}"
@@ -64,8 +68,8 @@ APPLY_NOTE_PROMPT = (
     "standard.\n\n"
     "Judge the size of the change. If the note is a small tweak (a fact, a line, a word), "
     "change only what it calls for and leave the rest as it is. But if the note asks for "
-    "something substantive — reversing the position, changing the argument, a different "
-    "angle, a new title — then make EVERY change required for the document to honestly "
+    "something substantive (reversing the position, changing the argument, a different "
+    "angle, a new title), then make EVERY change required for the document to honestly "
     "reflect the new direction. A half-applied flip that leaves the old position quietly "
     "standing is wrong. Commit to the new direction fully and believe it while you write "
     "it.\n\n"
@@ -80,7 +84,7 @@ APPLY_NOTE_PROMPT = (
 DRAFT_QUERIES = (
     "This is an idea for a blog post. List 3 to 5 short web-search queries that would "
     "gather the current facts needed to write it properly. Every query must be about the "
-    "idea's own subject — do not introduce products, devices, or topics the idea does not "
+    "idea's own subject. Do not introduce products, devices, or topics the idea does not "
     "mention. When a query asks for the latest, top, or current anything, include the "
     "current year from your instructions, never a past year. Output one query per line, "
     "no numbering and no commentary.\n\nIDEA:\n\n{idea}"
@@ -98,7 +102,7 @@ DRAFT_RESEARCH_BLOCK = (
     "Here is live web search on this idea. This is YOUR research and it is already done. "
     "Ground the post in it: take every name, version, price, and date from it, lead with "
     "what is current in it, and never present something it contradicts. Your own memory of "
-    "products and models is stale by construction — where the research and your memory "
+    "products and models is stale by construction: where the research and your memory "
     "disagree, the research wins.\n\n{ground}\n\n"
 )
 
@@ -108,7 +112,7 @@ def load_config(root):
     if not os.path.exists(p):
         raise RuntimeError(
             "No config.json found. Copy config.example.json to config.json and "
-            "point it at your model — that is the first setup step."
+            "point it at your model. That is the first setup step."
         )
     try:
         with open(p, encoding="utf-8") as f:
@@ -116,18 +120,18 @@ def load_config(root):
     except json.JSONDecodeError as e:
         raise RuntimeError(
             "config.json is not valid JSON (%s). A missing comma or quote is the "
-            "usual culprit — check line %d." % (e.msg, e.lineno)
+            "usual culprit; check line %d." % (e.msg, e.lineno)
         )
 
 
 def system_prompt(cfg, root):
-    """Who she is when she starts thinking: her name, your instructions, and —
-    once you write it — your company's voice."""
+    """Who she is when she starts thinking: her name, your instructions, and,
+    once you write it, your company's voice."""
     ip = os.path.join(root, cfg.get("instructions", "instructions.md"))
     if not os.path.exists(ip):
         raise RuntimeError(
             "No instructions file at %s. Copy instructions.example.md to "
-            "instructions.md and make it yours — her name, mission, and goals "
+            "instructions.md and make it yours. Her name, mission, and goals "
             "live there." % ip
         )
     instr = open(ip, encoding="utf-8").read()
@@ -142,7 +146,7 @@ def system_prompt(cfg, root):
     vp = os.path.join(root, cfg.get("voice", "voice.md"))
     if os.path.exists(vp):
         parts.append(
-            "# How this company writes — your voice\n\n"
+            "# How this company writes: your voice\n\n"
             "Write the way the samples below write. They are the standard; match "
             "their register, rhythm, and warmth.\n\n" + open(vp, encoding="utf-8").read()
         )
@@ -155,7 +159,7 @@ def _warn(msg):
 
 def _ask(cfg, root, task, tier="utility", temp=None):
     """One completion. Utility work (queries, lists, judging) goes to the small
-    fast tier; prose goes to the draft tier — writing IS her job, so it gets the
+    fast tier; prose goes to the draft tier. Writing IS her job, so it gets the
     best model you have. If the draft tier is unreachable she falls back to the
     utility model, loudly, rather than dying mid-run."""
     tiers = cfg.get("model", {})
@@ -206,7 +210,7 @@ def _self_review(cfg, root, draft_text):
     written. Issues -> correct ONLY what the findings require; voice, rhythm,
     structure, and length stay untouched."""
     if not cfg.get("search", {}).get("enabled"):
-        return "FACT-CHECK: (skipped — search is disabled in config.json)", draft_text
+        return "FACT-CHECK: (skipped: search is disabled in config.json)", draft_text
     facts = _fact_notes(cfg, root, draft_text)
     notes = "FACT-CHECK:\n" + facts
     if not _has_fact_issues(facts):
@@ -222,19 +226,19 @@ def draft(cfg, root, idea, review=False, do_search=True, checkpoint=None):
     her own result and corrects only what is wrong. Returns the final path.
 
     checkpoint, if given, is called with what she gathered (queries, sources)
-    AFTER research and BEFORE writing — and she does not write until it returns.
+    AFTER research and BEFORE writing, and she does not write until it returns.
     This is the pause-and-yield gate: the caller decides how long to hold her."""
     research = ""
     queries, sources = [], []
     if do_search and cfg.get("search", {}).get("enabled"):
         qraw = _ask(cfg, root, DRAFT_QUERIES.format(idea=idea), temp=0.2)
-        # The idea itself is always the first query — the model's queries can
+        # The idea itself is always the first query. The model's queries can
         # wander off-topic (a stale small model will), but this one cannot.
         queries = [idea.strip()[:120]]
         queries += [q.strip(" -*•\t") for q in qraw.splitlines() if q.strip()][:5]
         url = cfg["search"].get("url", "http://localhost:8888")
         ground = search.grounding(queries, url=url)
-        # Snippets carry titles, not contents — a "best agents of 2026" page
+        # Snippets carry titles, not contents: a "best agents of 2026" page
         # surfaces as a headline without its list. Read the top pages too.
         pages = []
         for r in search.search(queries[0], url=url, n=3)[:2]:
@@ -268,7 +272,7 @@ def draft(cfg, root, idea, review=False, do_search=True, checkpoint=None):
 
 
 def factcheck(cfg, root, path):
-    """Fact notes only — report, never rewrite. Returns the report path."""
+    """Fact notes only: report, never rewrite. Returns the report path."""
     notes = _fact_notes(cfg, root, _read(path))
     fdir = _state(cfg, root, "factchecks")
     rp = os.path.join(fdir, os.path.basename(path).rsplit(".", 1)[0] + "-factcheck.md")
@@ -333,9 +337,18 @@ def _get_json(url, timeout=5):
 
 def _check_tier(name, tier):
     """One (name, ok, detail) row for a model tier: is the server up, and is the
-    named model actually available on it."""
+    named model actually available on it. A tier with no model chosen yet is not
+    an error; it is simply not in use (drafts fall back to the utility tier)."""
     backend = tier.get("backend")
     model = tier.get("model", "")
+    if not model:
+        if name.endswith("draft"):
+            return (name, True,
+                    "no model chosen yet; drafts use the utility tier until you "
+                    "pick one (module 4 is where the tiers split).")
+        return (name, False,
+                "no model set. She needs at least a utility model; put the name "
+                "of one you have in config.json.")
     if backend == "ollama":
         base = tier.get("url", "http://localhost:11434").rstrip("/")
         probe = base + "/api/tags"
@@ -343,12 +356,12 @@ def _check_tier(name, tier):
         base = tier.get("base_url", "http://localhost:1234").rstrip("/")
         probe = base + "/v1/models"
     else:
-        return (name, False, "unknown backend %r — use \"ollama\" or \"openai\"" % backend)
+        return (name, False, "unknown backend %r. Use \"ollama\" or \"openai\"" % backend)
     try:
         d = _get_json(probe)
     except Exception as e:
         return (name, False,
-                "cannot reach %s (%s) — is your model server running? Start Ollama / "
+                "cannot reach %s (%s); is your model server running? Start Ollama / "
                 "LM Studio / your server, then run doctor again." % (base, e))
     if backend == "ollama":
         have = [m.get("name", "") for m in d.get("models", [])]
@@ -367,7 +380,7 @@ def _check_tier(name, tier):
 
 
 def doctor(root):
-    """Preflight the whole setup. Returns [(check, ok, detail)] — every known
+    """Preflight the whole setup. Returns [(check, ok, detail)]: every known
     9pm install failure, checked, with the fix in the message."""
     checks = [("python", True, "%d.%d.%d at %s"
                % (sys.version_info[:3] + (sys.executable,)))]
@@ -382,12 +395,12 @@ def doctor(root):
         checks.append(("instructions", True, ip))
     else:
         checks.append(("instructions", False,
-                       "no instructions file at %s — copy instructions.example.md to "
+                       "no instructions file at %s. Copy instructions.example.md to "
                        "instructions.md and make it yours." % ip))
     vp = os.path.join(root, cfg.get("voice", "voice.md"))
     checks.append(("voice", True, vp if os.path.exists(vp) else
-                   "no voice.md yet — she will write without your company voice "
-                   "until you add one (module 2)."))
+                   "no voice.md yet. She will write without your company voice "
+                   "until you add one (module 3)."))
     for tier_name in ("utility", "draft"):
         tier = cfg.get("model", {}).get(tier_name)
         if tier:
@@ -395,12 +408,12 @@ def doctor(root):
         else:
             checks.append(("model:" + tier_name, tier_name == "draft",
                            "no %s tier in config.json%s" % (tier_name,
-                           " — drafts will use the utility model" if tier_name == "draft"
-                           else " — she needs at least a utility model")))
+                           ". Drafts will use the utility model" if tier_name == "draft"
+                           else ". She needs at least a utility model")))
     s = cfg.get("search", {})
     if not s.get("enabled"):
         checks.append(("search", True,
-                       "disabled in config.json — drafting works; fact-checking is off."))
+                       "disabled in config.json. Drafting works; fact-checking is off."))
     else:
         surl = s.get("url", "http://localhost:8888").rstrip("/")
         try:
@@ -411,11 +424,11 @@ def doctor(root):
             if "403" in msg or "HTTP 4" in msg:
                 checks.append(("search", False,
                                "SearXNG at %s refused the JSON API (%s). Its settings.yml "
-                               "ships with json off — add it under search: formats: "
+                               "ships with json off. Add it under search: formats: "
                                "[html, json], then restart. See the README." % (surl, msg)))
             else:
                 checks.append(("search", False,
-                               "cannot reach SearXNG at %s (%s) — is the container "
+                               "cannot reach SearXNG at %s (%s); is the container "
                                "running? docker start searxng, or set search.enabled "
                                "to false to draft without fact-checking." % (surl, msg)))
     try:
@@ -467,7 +480,7 @@ def main():
             print("\n[fact-check saved to %s]" % rp)
         elif args.cmd == "revise":
             rp = revise(cfg, ROOT, args.path, do_search=not args.no_search)
-            print("\n[revised draft saved to %s — original untouched]" % rp)
+            print("\n[revised draft saved to %s; original untouched]" % rp)
         elif args.cmd == "apply":
             note = args.note
             if args.note_file:

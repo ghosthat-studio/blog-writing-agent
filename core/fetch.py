@@ -1,6 +1,6 @@
 """Fetch a web page and return readable text. stdlib only.
 
-A researcher can't judge a page from a search snippet — the names and the real
+A researcher can't judge a page from a search snippet: the names and the real
 facts live in the body ("best agents of the year" lists, comparison pages, docs).
 This turns a URL into plain text the model can read. Public pages only; size-
 capped and best-effort (returns "" on any failure so callers degrade gracefully).

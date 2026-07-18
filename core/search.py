@@ -1,13 +1,13 @@
 """Web search via a self-hosted SearXNG instance (JSON API). stdlib only.
 
-No API key, no rate card, nobody logging your queries. Gentle by design — the
+No API key, no rate card, nobody logging your queries. Gentle by design: the
 consumer engines SearXNG aggregates rate-limit and CAPTCHA a self-hosted scraper
 if you burst at them, so this module:
   - paces requests (a minimum gap between calls), sipping like a human;
   - retries with backoff when a call comes back empty;
   - caches hits on disk, so repeated queries don't re-hit the engines.
 When it genuinely cannot get results, search() returns [] and callers degrade
-gracefully — they must never fabricate a result.
+gracefully; they must never fabricate a result.
 
 Engine selection: the default set is led by engines verified to serve
 self-hosted instances; the commonly-blocked ones stay in the list and rejoin
