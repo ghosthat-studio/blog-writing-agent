@@ -1,11 +1,11 @@
 # Blog Writing Agent
 
 A blog writing agent that runs on your hardware, against your model, in your company's
-voice. You name her, give her a mission, point her at how your company writes, and she
-drafts posts that sound like you — researched against live web search before she writes,
-fact-checked against her own draft after, with nothing published until you approve it.
+voice. You name it, give it a mission, and point it at how your company writes. It
+drafts posts that sound like you: researched against live web search before writing,
+fact-checked against its own draft after, with nothing published until you approve it.
 
-No cloud dependency. No API bill. No pip installs — the whole thing is Python standard
+No cloud dependency. No API bill. No pip installs: the whole thing is Python standard
 library. The model is config: Ollama, LM Studio, llama.cpp, vLLM, or a hosted key if you
 prefer.
 
@@ -19,36 +19,36 @@ work every week) walks you through setting it up: [ghosthatstudio.com](https://g
 ```
 git clone https://github.com/ghosthat-studio/blog-writing-agent.git
 cd blog-writing-agent
-python3 --version              # needs 3.10 or newer — macOS ships 3.9, the course covers this
+python3 --version              # needs 3.10 or newer (macOS ships 3.9)
 python3 -m venv .venv && source .venv/bin/activate
 cp config.example.json config.json      # point it at your model
-cp instructions.example.md instructions.md   # her name, mission, goals — make it yours
+cp instructions.example.md instructions.md   # the name, mission, goals
 python3 agent.py doctor        # checks the whole setup, tells you what to fix
 python3 agent.py draft --idea "your first post"
 ```
 
-Nothing to install: there are no dependencies. The venv is still a good habit — the first
+Nothing to install: there are no dependencies. The venv is still a good habit; the first
 thing you add later will want one.
 
-## What she does
+## What it does
 
 ```
 python3 agent.py draft --idea "..." [--review] [--no-search]
-python3 agent.py factcheck PATH          fact notes for any file — report, never rewrite
+python3 agent.py factcheck PATH          fact notes for any file. Report, never rewrite
 python3 agent.py revise PATH             re-run the fact-check pass; writes PATH-rev
 python3 agent.py apply PATH --note "..." one targeted edit, backup kept
 python3 agent.py doctor                  preflight the setup, plain-language fixes
 ```
 
-**She researches before she writes.** Your idea becomes her first search query, the model
-adds a few more, and she reads the top pages — not just the snippets — so the draft is
-grounded in what is true today, not in her training data. Her prompts tell her the date
-and that live results outrank her memory.
+**It researches before it writes.** Your idea becomes the first search query, the model
+adds a few more, and your agent reads the top pages rather than just the snippets, so
+the draft is grounded in what is true today. Its prompts carry the date and the rule
+that live results outrank model memory.
 
-**The review pass is fact-check only.** She writes verification queries from her own
-draft, searches them, and corrects only what is wrong or unverifiable. Voice, rhythm,
-structure, and length ship exactly as written — there is deliberately no style pass,
-because a rewrite against a punch-list flattens prose.
+**The review pass is fact-check only.** Your agent writes verification queries from its
+own draft, searches them, and corrects only what is wrong or unverifiable. Voice,
+rhythm, structure, and length ship exactly as written. There is deliberately no style
+pass, because a rewrite against a punch-list flattens prose.
 
 ## The dashboard
 
@@ -56,10 +56,10 @@ because a rewrite against a punch-list flattens prose.
 python3 dashboard/server.py        # http://127.0.0.1:8787
 ```
 
-Run her without a terminal: type an idea, watch her work, read drafts, and click
-**Approve** — the human gate. Approving marks the draft and copies it to `publish.dir`
+Run your agent without a terminal: type an idea, watch it work, read drafts, and click
+**Approve**, the human gate. Approving marks the draft and copies it to `publish.dir`
 from your config, and that is the only road out. It binds to 127.0.0.1, your machine
-only. (Reaching it from elsewhere is what a Cloudflare Tunnel is for — optional, covered
+only. (Reaching it from elsewhere is what a Cloudflare Tunnel is for: optional, covered
 in the course.)
 
 ## Config
@@ -68,8 +68,8 @@ in the course.)
 
 ```jsonc
 {
-  "name": "Blog Writing Agent",        // her name — yours to change, everywhere at once
-  "instructions": "instructions.md",   // mission, goals, who she is (module 1)
+  "name": "Blog Writing Agent",        // the name: yours to change, everywhere at once
+  "instructions": "instructions.md",   // mission, goals, who your agent is
   "voice": "voice.md",                 // how your company writes (module 2)
   "model": {
     "utility": { ... },                // small fast model: queries, lists, judging
@@ -87,9 +87,9 @@ its `url`/`base_url`, a `model` name, and optional `temperature`, `timeout`, `th
 affordable: utility work goes to something small and fast, prose goes to the best model
 you have. Same code, one config block apart.
 
-## Search: what makes her factual
+## Search: what makes it factual
 
-A local model's memory is stale by construction — it will state a version number with
+A local model's memory is stale by construction. It will state a version number with
 total confidence and be wrong. Grounding fixes that, and it runs on your machine too:
 [SearXNG](https://docs.searxng.org/), a self-hosted metasearch engine. No API key, no
 rate card, nobody logging your queries.
@@ -118,11 +118,11 @@ curl "http://localhost:8888/search?q=test&format=json"
 ```
 
 That URL goes in `config.json` under `search.url`. If you'd rather start without
-search, set `search.enabled` to `false` — drafting works fine; she just can't
-fact-check herself, so `--review`, `factcheck`, and `revise` will sit this one out.
+search, set `search.enabled` to `false`. Drafting works fine; your agent just can't
+fact-check itself, so `--review`, `factcheck`, and `revise` will sit this one out.
 (`agent.py doctor` diagnoses both of these setups by name.)
 
-She is deliberately gentle with the engines: paced requests, retries with backoff, an
+It is deliberately gentle with the engines: paced requests, retries with backoff, an
 on-disk cache. Hammering a metasearch instance gets it CAPTCHA-blocked, and then
 nobody gets facts.
 
@@ -131,19 +131,19 @@ nobody gets facts.
 ```
 agent.py               the agent: draft / factcheck / revise / apply / doctor
 core/
-  llm.py               model interface — Ollama + any OpenAI-compatible server
+  llm.py               model interface: Ollama + any OpenAI-compatible server
   search.py            web search via SearXNG: paced, cached, gentle
-  fetch.py             turns a result URL into readable text — she reads pages, not snippets
-  datapool.py          her memory: a directory of JSON files, inspectable, yours
-  runlog.py            what ran, when, what she used — the record you trust
-dashboard/             run her without a terminal; the Approve gate lives here
+  fetch.py             turns a result URL into readable text: pages, not snippets
+  datapool.py          the memory: a directory of JSON files, inspectable, yours
+  runlog.py            what ran, when, what it used: the record you trust
+dashboard/             run your agent without a terminal; the Approve gate lives here
 config.example.json    copy to config.json; the model seam lives here
-instructions.example.md  copy to instructions.md — her name, mission, goals
-voice.example.md       copy to voice.md — how your company writes, with real samples
+instructions.example.md  copy to instructions.md: the name, mission, goals
+voice.example.md       copy to voice.md: how your company writes, with real samples
 tests/                 82 tests, stdlib unittest: python3 -m unittest discover tests
-state/                 her drafts, memory, run logs, and approved posts (git-ignored)
+state/                 drafts, memory, run logs, and approved posts (git-ignored)
 ```
 
 ## License
 
-MIT. She's yours.
+MIT. It's yours.

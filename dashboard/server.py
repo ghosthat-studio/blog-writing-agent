@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Her dashboard: run her without a terminal, watch her work, read the log.
+"""The dashboard: run your agent without a terminal, watch it work, read the log.
 
 The dashboard is how an agent stops being a script and starts being staff. It
 binds to 127.0.0.1, your machine only, and the human gate is built in:
@@ -231,7 +231,7 @@ class Handler(BaseHTTPRequestHandler):
                     job["_resume"] = ev
 
                     def checkpoint(info):
-                        # Park this thread: yield what she gathered, wait for
+                        # Park this thread: yield what the run gathered, wait for
                         # the human click. Nothing is lost by waiting.
                         job["yielded"] = info
                         job["status"] = "waiting"

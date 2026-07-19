@@ -54,13 +54,13 @@
   <section>
     <div class="panel">
       <h2>New draft</h2>
-      <textarea id="idea" placeholder="What should she write about?"></textarea>
+      <textarea id="idea" placeholder="What should your agent write about?"></textarea>
       <label class="check"><input type="checkbox" id="review" checked> fact-check the draft (facts only, never voice)</label>
-      <label class="check"><input type="checkbox" id="pause"> pause before writing: she yields her research and waits for you</label>
+      <label class="check"><input type="checkbox" id="pause"> pause before writing: review the research before it writes</label>
       <button id="go">Draft it</button>
       <div class="jobline" id="jobline" hidden></div>
       <div class="waiting" id="waiting" hidden>
-        <div class="w-head">She's ready to write</div>
+        <div class="w-head">Ready to write</div>
         <div class="w-body" id="waiting-body"></div>
         <button class="goahead" id="goahead">Go ahead</button>
       </div>
@@ -77,7 +77,7 @@
   </section>
   <section>
     <h2>Reading</h2>
-    <div id="viewer-empty">Click a draft to read it. Approve publishes it; nothing goes out without you.</div>
+    <div id="viewer-empty">Click a draft to read it. Approve marks it ready; nothing goes live without you.</div>
     <iframe id="viewer" hidden sandbox=""></iframe>
   </section>
 </main>
@@ -142,9 +142,9 @@ async function refresh() {
     const queries = (y.queries || []).map(q => "· " + q).join("\n");
     const sources = (y.sources || []).map(s => "· " + s.title + "  (" + s.url + ")").join("\n");
     $("waiting-body").textContent =
-      (queries ? "She searched:\n" + queries + "\n" : "") +
-      (sources ? "She read:\n" + sources : "") ||
-      "No research this run: search is off. She is holding before writing.";
+      (queries ? "It searched:\n" + queries + "\n" : "") +
+      (sources ? "It read:\n" + sources : "") ||
+      "No research this run: search is off. It is holding before writing.";
     $("goahead").onclick = async () => {
       await api("/api/resume", {job_id: waiting.id});
       poll();

@@ -125,13 +125,13 @@ def load_config(root):
 
 
 def system_prompt(cfg, root):
-    """Who she is when she starts thinking: her name, your instructions, and,
+    """Who your agent is when it starts thinking: its name, your instructions, and,
     once you write it, your company's voice."""
     ip = os.path.join(root, cfg.get("instructions", "instructions.md"))
     if not os.path.exists(ip):
         raise RuntimeError(
             "No instructions file at %s. Copy instructions.example.md to "
-            "instructions.md and make it yours. Her name, mission, and goals "
+            "instructions.md and make it yours. The name, mission, and goals "
             "live there." % ip
         )
     instr = open(ip, encoding="utf-8").read()
@@ -159,8 +159,8 @@ def _warn(msg):
 
 def _ask(cfg, root, task, tier="utility", temp=None):
     """One completion. Utility work (queries, lists, judging) goes to the small
-    fast tier; prose goes to the draft tier. Writing IS her job, so it gets the
-    best model you have. If the draft tier is unreachable she falls back to the
+    fast tier; prose goes to the draft tier. Writing is the whole job, so it gets the
+    best model you have. If the draft tier is unreachable the run falls back to the
     utility model, loudly, rather than dying mid-run."""
     tiers = cfg.get("model", {})
     system = system_prompt(cfg, root)
@@ -195,7 +195,7 @@ def _has_fact_issues(facts):
 
 
 def _fact_notes(cfg, root, draft_text):
-    """Search-grounded fact-check: she writes her own verification queries from
+    """Search-grounded fact-check: the agent writes its own verification queries from
     the draft, searches them, and judges the draft against what came back."""
     s = cfg.get("search", {})
     qraw = _ask(cfg, root, FACTCHECK_QUERIES.format(draft=draft_text), temp=0.2)
@@ -221,13 +221,13 @@ def _self_review(cfg, root, draft_text):
 
 
 def draft(cfg, root, idea, review=False, do_search=True, checkpoint=None):
-    """Write a post. She researches the idea FIRST, so the draft is written from
-    current facts rather than her stale memory; with review she then fact-checks
-    her own result and corrects only what is wrong. Returns the final path.
+    """Write a post. The agent researches the idea FIRST, so the draft is written
+    from current facts rather than stale model memory; with review it then
+    fact-checks its own result and corrects only what is wrong. Returns the path.
 
-    checkpoint, if given, is called with what she gathered (queries, sources)
-    AFTER research and BEFORE writing, and she does not write until it returns.
-    This is the pause-and-yield gate: the caller decides how long to hold her."""
+    checkpoint, if given, is called with what was gathered (queries, sources)
+    AFTER research and BEFORE writing, and nothing gets written until it returns.
+    This is the pause-and-yield gate: the caller decides how long to hold the run."""
     research = ""
     queries, sources = [], []
     if do_search and cfg.get("search", {}).get("enabled"):
@@ -347,7 +347,7 @@ def _check_tier(name, tier):
                     "no model chosen yet; drafts use the utility tier until you "
                     "pick one (module 4 is where the tiers split).")
         return (name, False,
-                "no model set. She needs at least a utility model; put the name "
+                "no model set. Your agent needs at least a utility model; put the name "
                 "of one you have in config.json.")
     if backend == "ollama":
         base = tier.get("url", "http://localhost:11434").rstrip("/")
@@ -399,7 +399,7 @@ def doctor(root):
                        "instructions.md and make it yours." % ip))
     vp = os.path.join(root, cfg.get("voice", "voice.md"))
     checks.append(("voice", True, vp if os.path.exists(vp) else
-                   "no voice.md yet. She will write without your company voice "
+                   "no voice.md yet. Your agent will write without your company voice "
                    "until you add one (module 3)."))
     for tier_name in ("utility", "draft"):
         tier = cfg.get("model", {}).get(tier_name)
@@ -409,7 +409,7 @@ def doctor(root):
             checks.append(("model:" + tier_name, tier_name == "draft",
                            "no %s tier in config.json%s" % (tier_name,
                            ". Drafts will use the utility model" if tier_name == "draft"
-                           else ". She needs at least a utility model")))
+                           else ". It needs at least a utility model")))
     s = cfg.get("search", {})
     if not s.get("enabled"):
         checks.append(("search", True,
