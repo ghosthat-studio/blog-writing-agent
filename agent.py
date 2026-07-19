@@ -45,17 +45,21 @@ FACTCHECK_QUERIES = (
 
 FACTCHECK_TASK = (
     "Fact-check the following draft using the search results below, preferring primary "
-    "sources. For every factual claim, product or model name, price, statistic, date, or "
-    "company detail, output a line: CLAIM -> VERIFIED (source) / UNVERIFIED / WRONG "
-    "(correction + source). Note whether something has actually shipped versus only been "
-    "announced. If the sources don't cover a claim, mark it UNVERIFIED. Do not rewrite the "
-    "draft; just report.\n\nSEARCH RESULTS:\n\n{results}\n\nDRAFT:\n\n{draft}"
+    "sources. Judge only claims an outside reader could check: product and model names, "
+    "versions, prices, statistics, dates, and what things actually do. First-person "
+    "statements of the author's own plans, opinions, or internal workings are not claims; "
+    "skip them entirely. For each checkable claim, output a line: CLAIM -> VERIFIED "
+    "(source) / UNVERIFIED / WRONG (correction + source). Prices and versions mean the "
+    "CURRENT ones unless the draft says otherwise. Note whether something has actually "
+    "shipped versus only been announced. If the sources don't cover a claim, mark it "
+    "UNVERIFIED. Do not rewrite the draft; just report.\n\nSEARCH RESULTS:\n\n{results}\n\nDRAFT:\n\n{draft}"
 )
 
 FACT_FIX_PROMPT = (
     "Apply these fact-check findings to the document below. Correct anything marked WRONG "
-    "using the given correction and source; soften or qualify anything UNVERIFIED; remove "
-    "invented specifics that could not be confirmed. When a model, product, price, version, "
+    "using the given correction and source. Leave anything marked UNVERIFIED exactly as it "
+    "is unless it states a specific external number, version, or date that could not be "
+    "confirmed. When a model, product, price, version, "
     "or date is involved, use the REAL current fact from the findings, never your own "
     "memory. Change ONLY what the findings require, and keep the document's voice, structure, "
     "length, and every other line exactly as they are. If the document is HTML return valid "
