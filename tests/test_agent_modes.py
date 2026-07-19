@@ -288,3 +288,23 @@ class TestCheckpoint(ModeTestCase):
             path = agent.draft(self.cfg, self.root, "an idea", review=False,
                                do_search=False)
         self.assertTrue(path.endswith("test-post.html"))
+
+
+class TestFenceStripping(ModeTestCase):
+    def test_fact_fix_output_fences_are_stripped(self):
+        fenced = "```html\n" + FIXED_HTML + "\n```"
+        gen = _fake_generate([
+            ("verify the factual claims", "q1"),
+            ("Fact-check the following draft", BAD_FACTS),
+            ("Apply these fact-check findings", fenced),
+        ])
+        with mock.patch.object(llm, "generate", gen), \
+             mock.patch.object(search, "grounding", return_value="### Results"):
+            notes, out = agent._self_review(self.cfg, self.root, DRAFT_HTML)
+        self.assertEqual(out, FIXED_HTML)
+
+    def test_draft_output_fences_are_stripped(self):
+        gen = _fake_generate([("Write the full blog post", "```html\n" + DRAFT_HTML + "\n```")])
+        with mock.patch.object(llm, "generate", gen):
+            path = agent.draft(self.cfg, self.root, "an idea", review=False, do_search=False)
+        self.assertEqual(Path(path).read_text(encoding="utf-8"), DRAFT_HTML)

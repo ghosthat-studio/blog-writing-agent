@@ -153,6 +153,17 @@ def system_prompt(cfg, root):
     return "\n\n---\n\n".join(parts)
 
 
+def _unfence(text):
+    """Models love wrapping whole documents in markdown code fences. Strip one
+    outer fence pair if present; the document inside is what was asked for."""
+    t = text.strip()
+    if t.startswith("```"):
+        first_nl = t.find("\n")
+        if first_nl != -1 and t.endswith("```"):
+            t = t[first_nl + 1:-3].strip()
+    return t
+
+
 def _warn(msg):
     print("WARN: " + msg, file=sys.stderr)
 
@@ -215,8 +226,8 @@ def _self_review(cfg, root, draft_text):
     notes = "FACT-CHECK:\n" + facts
     if not _has_fact_issues(facts):
         return notes, draft_text
-    revised = _ask(cfg, root, FACT_FIX_PROMPT.format(facts=facts, doc=draft_text),
-                   tier="draft", temp=0.3)
+    revised = _unfence(_ask(cfg, root, FACT_FIX_PROMPT.format(facts=facts, doc=draft_text),
+                            tier="draft", temp=0.3))
     return notes, revised
 
 
@@ -252,8 +263,8 @@ def draft(cfg, root, idea, review=False, do_search=True, checkpoint=None):
     if checkpoint:
         checkpoint({"queries": queries, "sources": sources,
                     "research_chars": len(research)})
-    initial = _ask(cfg, root, DRAFT_TASK.format(research=research, idea=idea),
-                   tier="draft", temp=0.6)
+    initial = _unfence(_ask(cfg, root, DRAFT_TASK.format(research=research, idea=idea),
+                            tier="draft", temp=0.6))
     slug = _slug_of(initial)
     ddir = _state(cfg, root, "drafts")
     changed, notes, final = False, None, initial
@@ -302,13 +313,13 @@ def apply_note(cfg, root, path, note):
     Overwrites the file in place, keeping a .bak copy. New claims that arrive
     with feedback get the same fact-check a fresh draft gets."""
     doc = _read(path)
-    out = _ask(cfg, root, APPLY_NOTE_PROMPT.format(note=note, doc=doc), tier="draft", temp=0.4)
+    out = _unfence(_ask(cfg, root, APPLY_NOTE_PROMPT.format(note=note, doc=doc), tier="draft", temp=0.4))
     fact_checked = False
     if cfg.get("search", {}).get("enabled"):
         facts = _fact_notes(cfg, root, out)
         if _has_fact_issues(facts):
-            out = _ask(cfg, root, FACT_FIX_PROMPT.format(facts=facts, doc=out),
-                       tier="draft", temp=0.4)
+            out = _unfence(_ask(cfg, root, FACT_FIX_PROMPT.format(facts=facts, doc=out),
+                            tier="draft", temp=0.4))
             fact_checked = True
     shutil.copy(path, path + ".bak")
     open(path, "w", encoding="utf-8").write(out)
