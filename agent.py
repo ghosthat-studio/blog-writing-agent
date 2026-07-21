@@ -158,13 +158,19 @@ def system_prompt(cfg, root):
 
 
 def _unfence(text):
-    """Models love wrapping whole documents in markdown code fences. Strip one
-    outer fence pair if present; the document inside is what was asked for."""
-    t = text.strip()
+    """Clean model output down to the document that was asked for. Weak or
+    misconfigured models leak two kinds of wrapper: markdown code fences around
+    the whole document, and reasoning preambles (a <think> block, or prose like
+    "Thinking Process:" before the real output). The draft prompt requires the
+    slug comment on line one, so anything before it is wrapper, not document."""
+    t = re.sub(r"(?s)<think>.*?</think>", "", text).strip()
     if t.startswith("```"):
         first_nl = t.find("\n")
         if first_nl != -1 and t.endswith("```"):
             t = t[first_nl + 1:-3].strip()
+    slug_at = t.find("<!-- slug:")
+    if slug_at > 0:
+        t = t[slug_at:].strip()
     return t
 
 

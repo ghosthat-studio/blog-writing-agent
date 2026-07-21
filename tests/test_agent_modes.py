@@ -308,3 +308,29 @@ class TestFenceStripping(ModeTestCase):
         with mock.patch.object(llm, "generate", gen):
             path = agent.draft(self.cfg, self.root, "an idea", review=False, do_search=False)
         self.assertEqual(Path(path).read_text(encoding="utf-8"), DRAFT_HTML)
+
+
+class TestReasoningStripping(ModeTestCase):
+    def test_thinking_preamble_before_slug_is_cut(self):
+        leaked = ("Thinking Process: 1. **Analyze the Request:** blah blah\n\n"
+                  + DRAFT_HTML)
+        gen = _fake_generate([("Write the full blog post", leaked)])
+        with mock.patch.object(llm, "generate", gen):
+            path = agent.draft(self.cfg, self.root, "an idea", review=False,
+                               do_search=False)
+        self.assertEqual(Path(path).read_text(encoding="utf-8"), DRAFT_HTML)
+
+    def test_think_tags_are_stripped_anywhere(self):
+        leaked = "<think>let me reason about this at length</think>\n" + DRAFT_HTML
+        gen = _fake_generate([("Write the full blog post", leaked)])
+        with mock.patch.object(llm, "generate", gen):
+            path = agent.draft(self.cfg, self.root, "an idea", review=False,
+                               do_search=False)
+        self.assertEqual(Path(path).read_text(encoding="utf-8"), DRAFT_HTML)
+
+    def test_clean_output_passes_through_untouched(self):
+        gen = _fake_generate([("Write the full blog post", DRAFT_HTML)])
+        with mock.patch.object(llm, "generate", gen):
+            path = agent.draft(self.cfg, self.root, "an idea", review=False,
+                               do_search=False)
+        self.assertEqual(Path(path).read_text(encoding="utf-8"), DRAFT_HTML)
