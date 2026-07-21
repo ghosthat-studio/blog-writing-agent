@@ -43,6 +43,9 @@
   .waiting .w-head { color: var(--warn); font-weight: 600; font-size: 0.9375rem; margin-bottom: 0.4rem; }
   .waiting .w-body { font-size: 0.875rem; color: var(--dim); white-space: pre-wrap; margin-bottom: 0.6rem; }
   .goahead { background: var(--warn); }
+  .feedback { margin-top: 1rem; }
+  .feedback textarea { min-height: 3rem; }
+  .feedback button { margin-top: 0.5rem; }
 </style>
 </head>
 <body>
@@ -79,6 +82,11 @@
     <h2>Reading</h2>
     <div id="viewer-empty">Click a draft to read it. Approve marks it ready; nothing goes live without you.</div>
     <iframe id="viewer" hidden sandbox=""></iframe>
+    <div class="feedback" id="feedback" hidden>
+      <h2>Feedback on this draft</h2>
+      <textarea id="feedback-note" placeholder="What should change? One note, applied as a targeted edit."></textarea>
+      <button id="feedback-send">Apply feedback</button>
+    </div>
   </section>
 </main>
 <script>
@@ -113,6 +121,8 @@ function draftRow(d) {
   return row;
 }
 
+let openDraft = null;
+
 async function view(file) {
   const r = await fetch("/api/draft?file=" + encodeURIComponent(file));
   const text = await r.text();
@@ -120,6 +130,26 @@ async function view(file) {
   const v = $("viewer");
   v.hidden = false;
   v.srcdoc = "<style>body{font:17px/1.6 Georgia,serif;max-width:42em;margin:2em auto;padding:0 1em;color:#222}</style>" + text;
+  openDraft = file;
+  $("feedback").hidden = false;
+}
+
+async function sendFeedback() {
+  const note = $("feedback-note").value.trim();
+  if (!note || !openDraft) return;
+  await api("/api/run", {mode: "apply", file: openDraft, note});
+  $("feedback-note").value = "";
+  const applied = openDraft;
+  const wait = setInterval(async () => {
+    const d = await api("/api/jobs");
+    const j = d.jobs[0];
+    if (j.status !== "running") {
+      clearInterval(wait);
+      if (j.status === "done") view(applied);
+      refresh();
+    }
+  }, 2000);
+  poll();
 }
 
 async function refresh() {
@@ -160,6 +190,8 @@ async function refresh() {
     return line;
   }));
 }
+
+$("feedback-send").onclick = sendFeedback;
 
 $("go").onclick = async () => {
   const idea = $("idea").value.trim();
